@@ -1,25 +1,36 @@
 provider "aws" {
   region = "us-east-1"
 }
+##############
+###   S3   ###
+##############
 
 resource "aws_s3_bucket" "dev_bucket" {
-  bucket = "${local.repo}-dev-${local.sufix}"
+  bucket = local.dev_name
 }
 
 resource "aws_s3_bucket" "prd_bucket" {
-  bucket = "${local.repo}-prd-${local.sufix}"
+  bucket = local.prd_name
 }
 
-resource "aws_iam_user" "dev_user" {
-  name = "${local.repo}-dev-user"
+
+##############
+##### SQS ####
+##############
+
+resource "aws_sqs_queue" "dev_queue" {
+  name = local.dev_name
 }
 
-resource "aws_iam_user" "prd_user" {
-  name = "${local.repo}-prd-user"
+resource "aws_sqs_queue" "prd_queue" {
+  name = local.prd_name
 }
 
+################
+### DYNAMODB ###
+################
 resource "aws_dynamodb_table" "dev_table" {
-  name         = "${local.repo}-dev"
+  name         = local.dev_name
   billing_mode = "PAY_PER_REQUEST"
   hash_key     = "id"
   attribute {
@@ -28,7 +39,7 @@ resource "aws_dynamodb_table" "dev_table" {
   }
 }
 resource "aws_dynamodb_table" "prd_table" {
-  name         = "${local.repo}-prd"
+  name         = local.prd_name
   billing_mode = "PAY_PER_REQUEST"
   hash_key     = "id"
   attribute {
@@ -36,8 +47,24 @@ resource "aws_dynamodb_table" "prd_table" {
     type = "S"
   }
 }
+
+################
+### IAM USER ###
+################
+
+resource "aws_iam_user" "dev_user" {
+  name = local.dev_name
+}
+
+resource "aws_iam_user" "prd_user" {
+  name = local.prd_name
+}
+
+################
+#### POLICY #### 
+################
 resource "aws_iam_policy" "dev_policy" {
-  name        = "${local.repo}-dev-policy"
+  name        = local.dev_name
   description = "Policy to allow access to the dev bucket"
 
   policy = jsonencode({
@@ -55,15 +82,20 @@ resource "aws_iam_policy" "dev_policy" {
       },
       {
         Effect   = "Allow",
-        Action   = ["dynamodb:DescribeTable", "dynamodb:GetItem", "dynamodb:Query"],
+        Action   = ["dynamodb:DescribeTable", "dynamodb:GetItem", "dynamodb:Query", "dynamodb:PutItem"],
         Resource = [aws_dynamodb_table.dev_table.arn],
       },
+      {
+        Effect   = "Allow",
+        Action   = ["sqs:GetQueueUrl", "sqs:SendMessage"]
+        Resource = [aws_sqs_queue.dev_queue.arn]
+      }
     ],
   })
 }
 
 resource "aws_iam_policy" "prd_policy" {
-  name        = "${local.repo}-prd-policy"
+  name        = local.prd_name
   description = "Policy to allow access to both dev and prd buckets"
 
   policy = jsonencode({
@@ -89,9 +121,19 @@ resource "aws_iam_policy" "prd_policy" {
         "dynamodb:Query", ],
         Resource = [aws_dynamodb_table.dev_table.arn, aws_dynamodb_table.prd_table.arn],
       },
+      {
+        Effect   = "Allow",
+        Action   = ["sqs:*"]
+        Resource = [aws_sqs_queue.dev_queue.arn, aws_sqs_queue.prd_queue.arn]
+      }
     ],
   })
 }
+
+
+################################
+######  POLICY ATTACHMENT  ##### 
+################################
 
 resource "aws_iam_user_policy_attachment" "dev_attachment" {
   user       = aws_iam_user.dev_user.name
@@ -103,27 +145,13 @@ resource "aws_iam_user_policy_attachment" "prd_attachment" {
   policy_arn = aws_iam_policy.prd_policy.arn
 }
 
-
+################
+###  OUTPUT  ### 
+################
 output "s3_dev" {
   value = aws_s3_bucket.dev_bucket.bucket
 }
 
 output "s3_prd" {
   value = aws_s3_bucket.prd_bucket.bucket
-}
-
-output "iam_user_dev" {
-  value = aws_iam_user.dev_user.name
-}
-
-output "iam_user_prd" {
-  value = aws_iam_user.prd_user.name
-}
-
-output "dynamodb_dev" {
-  value = aws_dynamodb_table.dev_table.name
-}
-
-output "dynamodb_prd" {
-  value = aws_dynamodb_table.prd_table.name
 }

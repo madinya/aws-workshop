@@ -1,5 +1,9 @@
 .venv/*
-*.terraform/
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.json
 *.lock.hcl
 *.tfstate
 poetry.lock
