@@ -10,6 +10,7 @@ packages = [{include = "aws_workshop"}]
 python = "^3.11"
 boto3 = "^1.28.27"
 ipykernel = "^6.25.1"
+reportlab = "^4.0.4"
 
 [tool.poetry.group.dev.dependencies]
 black = "^23.7.0"
